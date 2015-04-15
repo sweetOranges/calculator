@@ -57,7 +57,15 @@ public class Calculator {
 	public Calculator(String expression) {
 		this.expression = expression;
 		this.initHeartMap();
-		this.prepare();
+	}
+
+	/**
+	 * 设置运算表达式
+	 * 
+	 * @param expression
+	 */
+	public void setExpression(String expression) {
+		this.expression = expression;
 	}
 
 	/**
@@ -69,6 +77,7 @@ public class Calculator {
 			types.put(Double.TYPE, Double.class);
 			types.put(Integer.TYPE, Integer.class);
 			types.put(Long.TYPE, Long.class);
+			types.put(Float.TYPE, Float.class);
 
 			Method[] methods = Math.class.getDeclaredMethods();
 			for (int i = 0; i < methods.length; i++) {
@@ -93,7 +102,6 @@ public class Calculator {
 	 * 系统准备阶段 拆分表达式
 	 */
 	private void prepare() {
-
 		char[] cs = this.expression.toCharArray();
 		StringBuffer buffer = new StringBuffer();
 		for (int i = 0; i < cs.length; i++) {
@@ -135,27 +143,30 @@ public class Calculator {
 	 * @return 计算结果
 	 */
 	public String start() {
-		for (int i = 0; i < this.expressions.size(); i++) {
-			String item = this.expressions.get(i);
-			if (item.matches("^[/+-/*/]$") || item.matches("^[a-z]+[0-9]*$")) {// 处理运算
-				this.ops.push(item);
-			}
-			if (item.matches("^[0-9]*$")) {// 处理数字
-				this.vals.push(item);
-			}
-			if (item.equals(")")) {
-				String op = this.ops.pop();
-				this.doit(op);
-			}
-		}
-		this._doit("^[/*/]$");
-		this._doit("^[/+-]$");
 
-		if (this.vals.size() == 1) {
+		this.prepare();// 运算准备阶段，分析数据元素
+
+		this.init();// 初始化数据环境，解决括号优先级
+		this._doit("^[/*/]$");// 乘除优先级
+		this._doit("^[/+-]$");// 加减优先级
+
+		String result = this.getResult();// 得到运算结果
+		
+		return result;
+
+	}
+
+	/**
+	 * 得到运算结果
+	 * 
+	 * @return
+	 */
+	private String getResult() {
+		if (this.vals.size() == 1 && this.ops.isEmpty()) {
 			return this.vals.pop();
 		}
-
 		return "error";
+
 	}
 
 	/**
@@ -167,7 +178,7 @@ public class Calculator {
 	private void _doit(String regx) {
 		for (int k = 0; k < this.ops.size(); k++) {
 			String op = this.ops.get(k);
-			if (op.matches("^[/+-]$")) {
+			if (op.matches(regx)) {
 				Method method = this.map.get(op);
 				try {
 					if (k + 1 < this.vals.size()) {
@@ -195,30 +206,43 @@ public class Calculator {
 	 *            操作符
 	 * @return 计算结果
 	 */
-	private void doit(String op) {
-		Method method = this.map.get(op);
-		Class<?>[] types = method.getParameterTypes();
-		Object[] objects = new Object[types.length];
-		for (int j = types.length - 1; j >= 0; j--) {
-			Object object = null;
-			Class<?> number = this.types.get(types[j]);
-			try {
-				Method mt = number.getDeclaredMethod("valueOf", String.class);
-				object = mt.invoke(mt.getClass(), this.vals.pop());
-			} catch (NoSuchMethodException | SecurityException
-					| IllegalAccessException | IllegalArgumentException
-					| InvocationTargetException e) {
-				e.printStackTrace();
+	private void init() {
+		for (int i = 0; i < this.expressions.size(); i++) {
+			String item = this.expressions.get(i);
+			if (item.matches("^[/+-/*/]$") || item.matches("^[a-z]+[0-9]*$")) {// 处理运算
+				this.ops.push(item);
 			}
-			objects[j] = object;
+			if (item.matches("^[0-9]*$")) {// 处理数字
+				this.vals.push(item);
+			}
+			if (item.equals(")")) {
+				String op = this.ops.pop();
+				Method method = this.map.get(op);
+				Class<?>[] types = method.getParameterTypes();
+				Object[] objects = new Object[types.length];
+				for (int j = types.length - 1; j >= 0; j--) {
+					Object object = null;
+					Class<?> number = this.types.get(types[j]);
+					try {
+						Method mt = number.getDeclaredMethod("valueOf",
+								String.class);
+						object = mt.invoke(mt.getClass(), this.vals.pop());
+					} catch (NoSuchMethodException | SecurityException
+							| IllegalAccessException | IllegalArgumentException
+							| InvocationTargetException e) {
+						e.printStackTrace();
+					}
+					objects[j] = object;
 
-		}
-		try {
-			this.vals
-					.push(method.invoke(method.getClass(), objects).toString());
-		} catch (IllegalAccessException | IllegalArgumentException
-				| InvocationTargetException e) {
-			e.printStackTrace();
+				}
+				try {
+					this.vals.push(method.invoke(method.getClass(), objects)
+							.toString());
+				} catch (IllegalAccessException | IllegalArgumentException
+						| InvocationTargetException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 
